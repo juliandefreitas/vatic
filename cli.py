@@ -15,7 +15,7 @@ import vision.track.interpolation
 import turkic.models
 from models import *
 import cStringIO
-import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 import qa
 import merge
 import parsedatetime
@@ -59,7 +59,7 @@ class extract(Command):
                     image.save(path)
         except:
             if not args.no_cleanup:
-                print "Aborted. Cleaning up..."
+                print ("Aborted. Cleaning up...")
                 shutil.rmtree(args.output)
             raise
 
@@ -86,7 +86,7 @@ class formatframes(Command):
         files.sort()
         files = [(x, y) for x, (_, y) in enumerate(files)]
         if not files:
-            print "No files ending with {0}".format(extension)
+            print ("No files ending with {0}".format(extension))
             return
         for frame, file in files:
             path = Video.getframepath(frame, args.output)
@@ -96,7 +96,7 @@ class formatframes(Command):
             except OSError:
                 os.makedirs(os.path.dirname(path))
                 os.link(file, path)
-        print "Formatted {0} frames".format(len(files))
+        print ("Formatted {0} frames".format(len(files)))
 
 @handler("Imports a set of video frames")
 class load(LoadCommand):
@@ -140,52 +140,62 @@ class load(LoadCommand):
         return "video, annotation, computer, vision"
 
     def __call__(self, args, group):
-        print "Checking integrity..."
+        print ("Checking integrity...")
 
         # read first frame to get sizes
         path = Video.getframepath(0, args.location)
         try:
             im = Image.open(path)
         except IOError:
-            print "Cannot read {0}".format(path)
+            print ("Cannot read {0}".format(path))
             return
         width, height = im.size
 
-        print "Searching for last frame..."
+        print ("Searching for last frame...")
 
         # search for last frame
-        toplevel = max(int(x)
-            for x in os.listdir(args.location))
+        #toplevel = max(int(x)
+        #    for x in os.listdir(args.location))
+
+        def isint(x):
+            try:
+                int(x)
+            except ValueError:
+                return False
+            else:
+                return True
+    
+        toplevel = max(int(x) for x in filter(isint, os.listdir(args.location)))
         secondlevel = max(int(x)
-            for x in os.listdir("{0}/{1}".format(args.location, toplevel)))
+            for x in filter(isint, os.listdir("{0}/{1}".format(args.location, toplevel))))
         maxframes = max(int(os.path.splitext(x)[0])
             for x in os.listdir("{0}/{1}/{2}"
             .format(args.location, toplevel, secondlevel))) + 1
 
-        print "Found {0} frames.".format(maxframes)
+        print ("Found {0} frames.".format(maxframes))
 
         # can we read the last frame?
         path = Video.getframepath(maxframes - 1, args.location)
         try:
             im = Image.open(path)
         except IOError:
-            print "Cannot read {0}".format(path)
+            print ("Cannot read {0}".format(path))
             return
 
         # check last frame sizes
         if im.size[0] != width and im.size[1] != height:
-            print "First frame dimensions differs from last frame"
+            print ("First frame dimensions differs from last frame")
             return
 
         if session.query(Video).filter(Video.slug == args.slug).count():
-            print "Video {0} already exists!".format(args.slug)
+            print ("Video {0} already exists!".format(args.slug))
             return
 
         if args.train_with:
             if args.for_training:
-                print "A training video cannot require training"
+                print ("A training video cannot require training")
                 return
-            print "Looking for training video..."
+            print ("Looking for training video...")
             trainer = session.query(Video)
             trainer = trainer.filter(Video.slug == args.train_with)
             if not trainer.count():
@@ -213,11 +223,11 @@ class load(LoadCommand):
             video.trainvalidator = qa.tolerable(args.for_training_overlap,
                                                 args.for_training_tolerance,
                                                 args.for_training_mistakes)
-            print "Training validator is {0}".format(video.trainvalidator)
+            print ("Training validator is {0}".format(video.trainvalidator))
 
         session.add(video)
 
-        print "Binding labels and attributes..."
+        print ("Binding labels and attributes...")
 
         # create labels and attributes
         labelcache = {}
@@ -226,7 +236,7 @@ class load(LoadCommand):
         for labeltext in args.labels:
             if labeltext[0] == "~":
                 if lastlabel is None:
-                    print "Cannot assign an attribute without a label!"
+                    print ("Cannot assign an attribute without a label!")
                     return
                 labeltext = labeltext[1:]
                 attribute = Attribute(text = labeltext)
@@ -240,7 +250,7 @@ class load(LoadCommand):
                 labelcache[labeltext] = label
                 lastlabel = label
 
-        print "Creating symbolic link..."
+        print ("Creating symbolic link...")
         symlink = "public/frames/{0}".format(video.slug)
         try:
             os.remove(symlink)
@@ -248,7 +258,7 @@ class load(LoadCommand):
             pass
         os.symlink(video.location, symlink)
 
-        print "Creating segments..."
+        print ("Creating segments...")
         # create shots and jobs
        
         if args.for_training:
@@ -324,7 +334,7 @@ class load(LoadCommand):
                         continue
 
                     if id not in pathcache:
-                        print "Imported new path {0}".format(id)
+                        print ("Imported new path {0}".format(id))
                         label = labelcache[label.strip()[1:-1]]
                         pathcache[id] = Path(job = job, label = label)
 
@@ -342,15 +352,15 @@ class load(LoadCommand):
 
         if args.for_training:
             if args.for_training and args.for_training_data:
-                print "Video and ground truth loaded."
+                print ("Video and ground truth loaded.")
             else:
-                print "Video loaded and ready for ground truth:"
-                print ""
-                print "\t{0}".format(job.offlineurl(config.localhost))
-                print ""
-                print "Visit this URL to provide training with ground truth."
+                print ("Video loaded and ready for ground truth:")
+                print ("")
+                print ("\t{0}".format(job.offlineurl(config.localhost)))
+                print ("")
+                print ("Visit this URL to provide training with ground truth.")
         else:
-            print "Video loaded and ready for publication."
+            print ("Video loaded and ready for publication.")
 
 @handler("Deletes an already imported video")
 class delete(Command):
@@ -363,7 +373,7 @@ class delete(Command):
     def __call__(self, args):
         video = session.query(Video).filter(Video.slug == args.slug)
         if not video.count():
-            print "Video {0} does not exist!".format(args.slug)
+            print ("Video {0} does not exist!".format(args.slug))
             return
         video = video.one()
 
@@ -381,12 +391,12 @@ class delete(Command):
             for job in segment.jobs:
                 if job.published and not job.completed:
                     hitid = job.disable()
-                    print "Disabled {0}".format(hitid)
+                    print ("Disabled {0}".format(hitid))
 
         session.delete(video)
         session.commit()
 
-        print "Deleted video and associated data."
+        print ("Deleted video and associated data.")
 
 class DumpCommand(Command):
     parent = argparse.ArgumentParser(add_help=False)
@@ -411,7 +421,7 @@ class DumpCommand(Command):
         response = []
         video = session.query(Video).filter(Video.slug == args.slug)
         if video.count() == 0:
-            print "Video {0} does not exist!".format(args.slug)
+            print ("Video {0} does not exist!".format(args.slug))
             raise SystemExit()
         video = video.one()
 
@@ -471,7 +481,7 @@ class visualize(DumpCommand):
                 box.attributes.insert(0, track.label)
 
         paths = [x.boxes for x in data]
-        print "Highlighting {0} tracks...".format(len(data))
+        print ("Highlighting {0} tracks...".format(len(data)))
 
         if args.labels:
             font = ImageFont.truetype("arial.ttf", 14)
@@ -563,13 +573,13 @@ class dump(DumpCommand):
 
         if args.pascal:
             if not args.output:
-                print "error: PASCAL output needs an output"
+                print ("error: PASCAL output needs an output")
                 return
             file = args.output
-            print "Dumping video {0}".format(video.slug)
+            print ("Dumping video {0}".format(video.slug))
         elif args.output:
             file = open(args.output, 'w')
-            print "Dumping video {0}".format(video.slug)
+            print ("Dumping video {0}".format(video.slug))
         else:
             file = cStringIO.StringIO()
 
@@ -603,8 +613,8 @@ class dump(DumpCommand):
             self.dumplabelme(file, data, args.slug, args.labelme)
         elif args.pascal:
             if scale != 1:
-                print "Warning: scale is not 1, yet frames are not resizing!"
-                print "Warning: you should manually update the JPEGImages"
+                print ("Warning: scale is not 1, yet frames are not resizing!")
+                print ("Warning: you should manually update the JPEGImages")
             self.dumppascal(file, video, data, args.pascal_difficult,
                             args.pascal_skip, args.pascal_negatives)
         else:
@@ -864,7 +874,7 @@ class dump(DumpCommand):
         if negdir:
             pascalds = vision.pascal.PascalDataset(negdir)
 
-        print "Writing annotations..."
+        print ("Writing annotations...")
         for frame in allframes:
             if frame in byframe:
                 boxes = byframe[frame]
@@ -945,9 +955,9 @@ class dump(DumpCommand):
             file.write("</annotation>")
             file.close()
 
-        print "{0} of {1} are difficult".format(numdifficult, numtotal)
+        print ("{0} of {1} are difficult".format(numdifficult, numtotal))
 
-        print "Writing image sets..."
+        print ("Writing image sets...")
         for label, frames in hasit.items():
             filename = "{0}/ImageSets/Main/{1}_trainval.txt".format(folder,
                                                                     label)
@@ -962,7 +972,7 @@ class dump(DumpCommand):
                 file.write("\n")
 
             if pascalds:
-                print "Sampling negative VOC for {0}".format(label)
+                print ("Sampling negative VOC for {0}".format(label))
                 negs = itertools.islice(pascalds.find(missing = [label.lower()]), 1000)
                 for neg in negs:
                     source = "{0}/Annotations/{1}.xml".format(negdir, neg)
@@ -997,7 +1007,7 @@ class dump(DumpCommand):
         train = "{0}/ImageSets/Main/train.txt".format(folder)
         shutil.copyfile(filename, train)
 
-        print "Writing JPEG frames..."
+        print ("Writing JPEG frames...")
         for frame in allframes:
             strframe = str(frame+1).zfill(6)
             path = Video.getframepath(frame, video.location)
@@ -1008,7 +1018,7 @@ class dump(DumpCommand):
                 pass
             os.link(path, dest)
 
-        print "Done."
+        print ("Done.")
 
 @handler("Samples the performance by worker")
 class sample(Command):
@@ -1040,7 +1050,7 @@ class sample(Command):
 
         workers = session.query(turkic.models.Worker)
         for worker in workers:
-            print "Sampling worker {0}".format(worker.id)
+            print ("Sampling worker {0}".format(worker.id))
 
             jobs = session.query(Job)
             jobs = jobs.filter(Job.worker == worker)
@@ -1055,7 +1065,7 @@ class sample(Command):
             jobs = jobs.limit(args.number)
 
             for job in jobs:
-                print "Visualizing HIT {0}".format(job.hitid)
+                print ("Visualizing HIT {0}".format(job.hitid))
                 paths = [x.getboxes(interpolate = True,
                                     bind = True,
                                     label = True) for x in job.paths]
@@ -1124,17 +1134,17 @@ class find(Command):
             for job in jobs:
                 if args.ids:
                     if job.published:
-                        print job.hitid,
+                        print (job.hitid,)
                         if job.completed:
-                            print job.assignmentid,
-                            print job.workerid,
-                        print ""
+                            print (job.assignmentid,)
+                            print (job.workerid,)
+                        print ("")
                     else:
-                        print "(not published)"
+                        print ("(not published)")
                 else:
-                    print job.offlineurl(config.localhost)
+                    print (job.offlineurl(config.localhost))
         else:
-            print "No jobs matching this criteria."
+            print ("No jobs matching this criteria.")
 
 @handler("List all videos loaded", "list")
 class listvideos(Command):
@@ -1169,11 +1179,11 @@ class listvideos(Command):
                 videos = videos.filter(Job.completed == True)
         
         if args.count:
-            print videos.count()
+            print (videos.count())
         else:
             for video in videos.distinct():
-                print "{0:<25}".format(video.slug),
+                print ("{0:<25}".format(video.slug),)
                 if args.stats:
-                    print "{0:>3}/{1:<8}".format(video.numcompleted, video.numjobs),
-                    print "${0:<15.2f}".format(video.cost),
-                print ""
+                    print ("{0:>3}/{1:<8}".format(video.numcompleted, video.numjobs),)
+                    print ("${0:<15.2f}".format(video.cost),)
+                print ("")
